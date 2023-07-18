@@ -4,6 +4,8 @@
 # NIMBLE package 
 # created by Yang Xu, 07/18/2023
 
+# Estimating Health Behaviors
+
 # read shapefile 
 us<-readShapePoly("~/Dropbox/2020-24 Yang Xu/AY 2020-2021/CHR2020/County Shapefiles/cb_2017_us_county_5m.shp", 
     proj4string=CRS("+proj=longlat +init=epsg:4326 +ellps=GRS80"))
@@ -19,7 +21,7 @@ sunNumNeigh=length(unlist(us.nb))
 
 # specify number of areas, weight, adj for nimble
 Nareas=3108
-Nindicators=9
+Nindicators=9 #since we have 9 indicators
 L=17482
 weights=rep(1,L)
 num=us.nb$num
