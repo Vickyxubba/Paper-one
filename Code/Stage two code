@@ -1,1 +1,88 @@
+# This file contains code for stage two model
+# using INLA package
+# created by Yang Xu 07/
+
+library(INLA)
+
+
+us<-readShapePoly("/Users/yangxu/Desktop/OneDrive - Drexel University/2020-24 Yang Xu/AY 2020-2021/CHR2020/cb_2018_us_county_5m/cb_2018_us_county_5m.shp", 
+                  proj4string=CRS("+proj=longlat +init=epsg:4326 +ellps=GRS80"))
+
+us.3108=us[us$STATEFP != '72' & us$STATEFP != '78' & 
+             us$STATEFP != '02' & us$STATEFP != '15' & us$STATEFP != '60' & 
+             us$STATEFP != '66' & us$STATEFP != '69',]
+
+us_shp.poly<-poly2nb(us.3108, queen = F)
+nb2INLA("mapus.adj", us_shp.poly)
+gus<-inla.read.graph(filename='mapus.adj')
+
+prec.prior1 <- list(prec = list(prior = "loggamma", param = c(1, 0.5)))
+prec.prior2 <- list(prec = list(prior = "loggamma", param = c(.5, .0005)))
+
+
+# null model, including fixed effect of ice
+m10<-obs~ICEwbinc
+
+
+r10<- inla(m10, data=data_adj.pre0,
+          family = "poisson", 
+          E=exp, 
+          #control.family = list(link = "log"),
+          control.predictor = list(compute=TRUE),
+          control.compute =list(dic = TRUE, waic=TRUE))
+summary(r10)
+
+# including estimated latent health fator from stage one 
+m20<-obs~ICEwbinc+hb_mean+cc_mean+phy_mean1
+
+r20<- inla(m20, data=data_adj.pre0,
+          family = "poisson", 
+          E=exp, 
+          control.family = list(link = "log"),
+          control.predictor = list(compute=TRUE),
+          control.compute =list(dic = TRUE,waic=TRUE))
+summary(r20)
+
+
+# including BYM prior
+m30<-obs~ICEwbinc+hb_mean+cc_mean+phy_mean+
+  f(ID, model = "besag",graph = gus, hyper=prec.prior1, scale.model = TRUE)+
+  f(ID2, model="iid",hyper=prec.prior1)
+
+
+r30<- inla(m30, data=data_adj.pre0,
+          family = "poisson", 
+          E=exp, 
+          control.family = list(link = "log"),
+          control.predictor = list(compute=TRUE),
+          control.compute =list(dic = TRUE,waic=TRUE))
+summary(r30)
+
+
+# including varying effect of ice
+
+m40<-obs~ICEwbinc+hb_mean+cc_mean+phy_mean+
+  f(ID, model = "besag",graph = gus, hyper=prec.prior1, scale.model = TRUE)+
+  f(ID2, model="iid",hyper=prec.prior1)+
+  f(ID3, ICEwbinc, model="besag",hyper=prec.prior1,graph = gus)
+
+
+
+r40<- inla(m40, data=data_adj.pre0,
+          family = "poisson", 
+          E=exp, 
+          control.family = list(link = "log"),
+          control.predictor = list(compute=TRUE),
+          control.compute =list(dic = TRUE,waic=TRUE,return.marginals.predictor=TRUE))
+summary(r40)  
+
+
+
+
+
+
+
+
+
+
 
