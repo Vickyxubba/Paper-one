@@ -1,1 +1,6 @@
+#---(Stage one: Spatial latent factor model)---
+# This file contains code for estimating three latent health factors (health behaviors; clinical care; and physical environment) 
+#for the 3108 us counties.
+# NIMBLE package 
+
 
