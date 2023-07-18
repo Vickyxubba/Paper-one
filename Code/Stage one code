@@ -1,6 +1,128 @@
 #---(Stage one: Spatial latent factor model)---
 # This file contains code for estimating three latent health factors (health behaviors; clinical care; and physical environment) 
-#for the 3108 us counties.
+# for the 3108 us counties.
 # NIMBLE package 
+# created by Yang Xu, 07/18/2023
+
+# read shapefile 
+us<-readShapePoly("~/Dropbox/2020-24 Yang Xu/AY 2020-2021/CHR2020/County Shapefiles/cb_2017_us_county_5m.shp", 
+    proj4string=CRS("+proj=longlat +init=epsg:4326 +ellps=GRS80"))
+
+us.3108=us[us$STATEFP != '72' & us$STATEFP != '78' & 
+             us$STATEFP != '02' & us$STATEFP != '15' & us$STATEFP != '60' & 
+             us$STATEFP != '66' & us$STATEFP != '69',]
+
+
+us.poly<-poly2nb(us.3108,queen=F)
+us.nb<-nb2WB(us.poly)
+sunNumNeigh=length(unlist(us.nb))
+
+# specify number of areas, weight, adj for nimble
+Nareas=3108
+Nindicators=9
+L=17482
+weights=rep(1,L)
+num=us.nb$num
+adj=us.nb$adj
+sumNumNeigh=38072
+
+constant<-list(N=Nareas, L=length(adj), adj=adj, weights=weights, num=num,
+               Nindicators=Nindicators)
+
+
+#code: for health behaviors 
+HBmodel<-nimbleCode({
+  
+  for (i in 1:N){
+    for (k in 1:Nindicators){
+      
+      HB.3108[i,k]~dnorm(u[i,k], tau[k])
+      u[i,k]<-alpha[k]+delta[k]*theta[i]
+      
+      
+    }
+  }
+  
+  theta[1:N]~dcar_normal(adj[1:L], weights[1:L], num[1:N], tau1, zero_mean = 1)
+  
+
+  delta[1]<-1  # for identifiability reasons, Abellan. 2007
+  delta[2]~dnorm(0, sd=1000)
+  delta[3]~dnorm(0, sd=1000)
+  delta[4]~dnorm(0, sd=1000)
+  delta[5]~dnorm(0, sd=1000)
+  delta[6]~dnorm(0, sd=1000)
+  delta[7]~dnorm(0, sd=1000)
+  delta[8]~dnorm(0, sd=1000)
+  delta[9]~dnorm(0, sd=1000)
+  
+  for (k in 1:Nindicators){
+    alpha[k]~dflat()
+    tau[k]~dgamma(0.5,0.0005)
+    #sig[k]<-sqrt(1/tauf[k])
+    #tauf[k]~dunif(0,100)
+    sig[k]<-sqrt(1/tau[k])
+  }
+  
+  tau1<-1
+  
+  #calculate variance of common
+  for (k in 1:Nindicators){
+    var.theta[k]<-pow(delta[k],2)*pow(sd(theta[1:N]),2)
+    var.noise[k]<-1/tau[k]
+    theta.exp[k]<-var.theta[k]/(var.theta[k]+var.noise[k])
+    
+    rho[k]<-delta[k]^2/(delta[k]^2+var.noise[k])
+    totw[k]<-rho[1]+rho[2]+rho[3]+rho[4]+rho[5]+rho[6]+rho[7]+rho[8]+rho[9]
+    weight[k]<-rho[k]/totw[k]  # to compare CHR&R weight
+    
+    
+  }
+  
+  for(i in 1:N){
+    pstep[i]<-step(theta[i]-0.381)  # calculate exceedence probability
+  }
+  
+})
+
+
+#####inits######
+LSTinits<-list( alpha=c(0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1), 
+                delta=c(1,0,0,0,0,0,0,0,0),
+                theta=rep(0.5,3108),
+                tau=c(0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1))
+
+
+Model1.HB<-nimbleModel(code=HBmodel, constants=constant,
+                       data=HB, inits=LSTinits)
+
+
+CModel1.HB<-compileNimble(Model1.HB)
+
+
+LSTConf.HB<-configureMCMC(Model1.HB,print=TRUE,enableWAIC=TRUE,
+                          monitors=CModel1.HB$getNodeNames(stochOnly=TRUE,
+                                                  includeData=FALSE)) 
+
+
+
+ LSTConf.HB$addMonitors(c("theta","delta","sig",'theta.exp',"var.noise",
+                         "var.theta","pstep","weight","rho","totw"))                               
+
+LSTConf.HB$printSamplers
+
+Model1MCMC.HB<-buildMCMC(LSTConf.HB)
+
+CModel1MCMC.HB<-compileNimble(Model1MCMC.HB,project=Model1.HB)
+
+
+niter<-100000
+set.seed(1234)
+samples1.HB_1<-runMCMC(CModel1MCMC.HB,niter=niter,nburnin=40000,nchains=2,thin=50)
+
+mcmcplot(samples1.HB_1)
+MCMCsummary(samples1.HB_1)
+
+HB.data=data.frame(MCMCsummary(samples1.HB_1))
 
 
